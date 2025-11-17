@@ -4,7 +4,7 @@ import { supabase } from '../../services/supabase'
 import { formatDistanceToNow } from '../../utils/dateUtils'
 import './Posts.css'
 
-const PostCard = forwardRef(({ post, onLikeToggle }, ref) => {
+const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete }, ref) => {
   const [isLiked, setIsLiked] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [likesCount, setLikesCount] = useState(post.likes_count || 0)
@@ -60,7 +60,7 @@ const PostCard = forwardRef(({ post, onLikeToggle }, ref) => {
         .select('like_id')
         .eq('post_id', post.post_id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
       
       setIsLiked(!!data)
     }
@@ -137,6 +137,16 @@ const PostCard = forwardRef(({ post, onLikeToggle }, ref) => {
             <div className="post-time">{formatDistanceToNow(post.created_at)}</div>
           </div>
         </div>
+        {showActions && (
+          <div className="post-header-actions" onClick={(e) => e.preventDefault()}>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(); }} className="btn-icon" title="Edit">
+              ✏️
+            </button>
+            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }} className="btn-icon btn-danger" title="Delete">
+              🗑️
+            </button>
+          </div>
+        )}
       </div>
 
       {post.pokemon && (
