@@ -86,20 +86,14 @@ export default function PostDetailPage() {
           />
         ) : (
           <>
-            <div className="post-actions">
-              {isOwner && (
-                <>
-                  <button onClick={() => setIsEditing(true)} className="btn-secondary">
-                    ✏️ Edit
-                  </button>
-                  <button onClick={handleDelete} className="btn-danger">
-                    🗑️ Delete
-                  </button>
-                </>
-              )}
-            </div>
-
-            <PostCard ref={postCardRef} post={post} onLikeToggle={refresh} />
+            <PostCard 
+              ref={postCardRef} 
+              post={post} 
+              onLikeToggle={refresh}
+              showActions={isOwner}
+              onEdit={() => setIsEditing(true)}
+              onDelete={handleDelete}
+            />
 
             <div className="comments-section">
               <h3>Comments</h3>
