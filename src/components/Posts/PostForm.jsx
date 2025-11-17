@@ -24,13 +24,22 @@ export default function PostForm({ onSuccess, onCancel, initialData = null }) {
       return
     }
 
+    // Validate image URL if provided
+    if (imageUrl.trim()) {
+      const imageExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?.*)?$/i
+      if (!imageExtensions.test(imageUrl.trim())) {
+        setError('Image URL must end with a valid image extension (.jpg, .jpeg, .png, .gif, .webp, .bmp, .svg)')
+        return
+      }
+    }
+
     setLoading(true)
     setError('')
 
     try {
       const postData = {
         content: content.trim(),
-        image_url: imageUrl.trim() || null,
+        image_url: imageUrl.trim() || selectedPokemon?.imageUrl || null,
         pokemon_id: selectedPokemon?.pokemon_id || null
       }
 
@@ -100,6 +109,9 @@ export default function PostForm({ onSuccess, onCancel, initialData = null }) {
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="https://example.com/image.jpg"
           />
+          <small className="form-hint">
+            Must be a valid image URL ending with .jpg, .jpeg, .png, .gif, .webp, .bmp, or .svg
+          </small>
         </div>
 
         <div className="form-actions">
