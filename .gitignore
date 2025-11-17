@@ -24,6 +24,6 @@ dist-ssr
 *.sw?
 .env
 database-schema.sql
-README.md
+README1.md
 SETUP_GUIDE.md
 eslint.config.js
