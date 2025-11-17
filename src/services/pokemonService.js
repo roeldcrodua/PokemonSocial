@@ -26,13 +26,34 @@ export const pokemonService = {
 
   // Add pokemon to database
   async addPokemon(pokemonData) {
+    console.log('[pokemonService] Adding Pokemon to database:', pokemonData)
+    
+    // Prepare the data with pokemon_id
+    const dataToInsert = {
+      pokemon_id: pokemonData.id || pokemonData.pokemon_id || pokemonData.name,
+      name: pokemonData.name,
+      imageUrl: pokemonData.imageUrl,
+      smallUrl: pokemonData.smallUrl,
+      artwork: pokemonData.artwork,
+      frontGif: pokemonData.frontGif,
+      backGif: pokemonData.backGif,
+      types: pokemonData.types,
+      abilities: pokemonData.abilities
+    }
+    
+    console.log('[pokemonService] Inserting Pokemon data:', dataToInsert)
     const { data, error } = await supabase
       .from('pokemon')
-      .insert(pokemonData)
+      .insert(dataToInsert)
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('[pokemonService] Error adding Pokemon:', error)
+      throw error
+    }
+    
+    console.log('[pokemonService] Pokemon added successfully:', data)
     return data
   },
 
