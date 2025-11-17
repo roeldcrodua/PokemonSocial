@@ -40,26 +40,84 @@ export default function PokemonSelector({ onSelect, onClose }) {
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    if (!searchId.trim()) return
 
-    // If searching, show random grid
-    setSearchLoading(true)
+    // If there's a search query, filter Pokemon
+    if (searchId.trim()) {
+      setSearchLoading(true)
+      try {
+        // Search using PokeAPI
+        const searchResults = await searchPokemonByName(searchId.trim().toLowerCase())
+        
+        if (searchResults.length > 0) {
+          // Limit to max 80 results (10x8 grid)
+          const limitedResults = searchResults.slice(0, 80)
+          setRandomPokemon(limitedResults)
+        } else {
+          // No results, load random grid
+          await loadRandomPokemon()
+        }
+        setShowRandomGrid(true)
+      } catch (error) {
+        console.error('Search error:', error)
+        // On error, show random grid
+        await loadRandomPokemon()
+        setShowRandomGrid(true)
+      } finally {
+        setSearchLoading(false)
+      }
+    } else {
+      // No search query, load random grid
+      setSearchLoading(true)
+      try {
+        await loadRandomPokemon()
+        setShowRandomGrid(true)
+      } catch (error) {
+        alert('Failed to load Pokemon grid')
+      } finally {
+        setSearchLoading(false)
+      }
+    }
+  }
+
+  const searchPokemonByName = async (query) => {
     try {
-      await loadRandomPokemon()
-      setShowRandomGrid(true)
+      const totalPokemon = 1010
+      const results = []
+      
+      // Fetch all pokemon names from PokeAPI (species list)
+      const response = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${totalPokemon}`)
+      const data = await response.json()
+      
+      // Filter by name matching the query
+      const matchingPokemon = data.results.filter(p => 
+        p.name.toLowerCase().includes(query)
+      )
+      
+      // Fetch details for matching Pokemon (limit to 64)
+      const limitedMatches = matchingPokemon.slice(0, 64)
+      const pokemonPromises = limitedMatches.map(async (p) => {
+        try {
+          const pokemonData = await pokemonService.fetchPokemonFromAPI(p.name)
+          return { ...pokemonData, pokemon_id: pokemonData.id, id: pokemonData.id }
+        } catch (error) {
+          return null
+        }
+      })
+      
+      const fetchedResults = await Promise.all(pokemonPromises)
+      return fetchedResults.filter(p => p !== null)
     } catch (error) {
-      alert('Failed to load Pokemon grid')
-    } finally {
-      setSearchLoading(false)
+      console.error('Error searching Pokemon:', error)
+      return []
     }
   }
 
   const loadRandomPokemon = async () => {
     const totalPokemon = 1010 // Total number of Pokemon in PokeAPI
-    const gridSize = 80 // 10 columns x 8 rows
+    const gridSize = 64 // 8 columns x 8 rows
     const randomIds = []
     
-    // Generate 80 random unique Pokemon IDs
+    // Generate 64 random unique Pokemon IDs
     while (randomIds.length < gridSize) {
       const randomId = Math.floor(Math.random() * totalPokemon) + 1
       if (!randomIds.includes(randomId)) {
@@ -99,16 +157,28 @@ export default function PokemonSelector({ onSelect, onClose }) {
     if (!selectedPopupPokemon) return
     
     try {
-      // Add to database if not exists
-      const existingPokemon = pokemon.find(p => p.pokemon_id === selectedPopupPokemon.id)
-      const pokemonToSelect = existingPokemon || await pokemonService.addPokemon(selectedPopupPokemon)
+      console.log('[PokemonSelector] Adding Pokemon to crew:', selectedPopupPokemon)
       
-      onSelect(pokemonToSelect)
+      // Check if Pokemon already exists in database
+      const existingPokemon = pokemon.find(p => p.pokemon_id === selectedPopupPokemon.id)
+      
+      if (existingPokemon) {
+        console.log('[PokemonSelector] Pokemon already exists, using existing:', existingPokemon)
+        onSelect(existingPokemon)
+      } else {
+        console.log('[PokemonSelector] Pokemon not in database, adding new Pokemon')
+        const newPokemon = await pokemonService.addPokemon(selectedPopupPokemon)
+        console.log('[PokemonSelector] Pokemon added to database:', newPokemon)
+        
+        // Refresh the pokemon list
+        await loadPokemon()
+        
+        onSelect(newPokemon)
+      }
+      
       setSelectedPopupPokemon(null)
     } catch (error) {
-      // Pokemon might already exist, try to select it anyway
-      onSelect(selectedPopupPokemon)
-      setSelectedPopupPokemon(null)
+      console.error('[PokemonSelector] Error adding Pokemon to crew:', error)
     }
   }
 
@@ -140,7 +210,7 @@ export default function PokemonSelector({ onSelect, onClose }) {
               type="text"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
-              placeholder="Search to browse 80 random Pokemon..."
+              placeholder="Search to browse"
               className="search-input"
             />
             <button type="submit" disabled={searchLoading} className="add-button">
@@ -154,7 +224,12 @@ export default function PokemonSelector({ onSelect, onClose }) {
             <button onClick={handleBackToList} className="back-button">
               ← Back to Saved Pokemon
             </button>
-            <span className="grid-info">10 × 8 Grid - Click any Pokemon for details</span>
+            <span className="grid-info">
+              {searchId.trim() 
+                ? `Showing ${randomPokemon.length} result${randomPokemon.length !== 1 ? 's' : ''} for "${searchId}"`
+                : `Click any Pokemon for details (${randomPokemon.length} shown)`
+              }
+            </span>
           </div>
         )}
 
@@ -164,11 +239,11 @@ export default function PokemonSelector({ onSelect, onClose }) {
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="🔍 Filter saved Pokemon by name..."
+              placeholder="🔍 Filter Pokemon by name"
               className="filter-input"
             />
             <span className="pokemon-count">
-              {filteredPokemon.length} Pokemon{filteredPokemon.length !== 1 ? 's' : ''}
+              Recommendations
             </span>
           </div>
         )}
