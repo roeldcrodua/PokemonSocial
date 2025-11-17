@@ -14,7 +14,101 @@ export const postService = {
     console.log('getPosts called with options:', options)
 
     try {
-      // Simplified query without joins first
+      // For sorting by likes or comments, we need to get actual counts from related tables
+      if (sortBy === 'likes_count' || sortBy === 'comments_count') {
+        console.log('Fetching posts with actual counts for sorting...')
+        
+        // First get all posts with basic filter
+        let query = supabase
+          .from('posts')
+          .select('*')
+
+        if (userId) {
+          query = query.eq('user_id', userId)
+        }
+
+        const { data: allPosts, error: postsError } = await query
+        
+        if (postsError) {
+          console.error('getPosts error:', postsError)
+          throw postsError
+        }
+
+        if (!allPosts || allPosts.length === 0) {
+          return []
+        }
+
+        // Fetch actual counts for each post
+        const postsWithCounts = await Promise.all(
+          allPosts.map(async (post) => {
+            // Get actual likes count
+            const { count: actualLikesCount } = await supabase
+              .from('likes')
+              .select('*', { count: 'exact', head: true })
+              .eq('post_id', post.post_id)
+            
+            // Get actual comments count
+            const { count: actualCommentsCount } = await supabase
+              .from('comments')
+              .select('*', { count: 'exact', head: true })
+              .eq('post_id', post.post_id)
+            
+            return {
+              ...post,
+              actual_likes_count: actualLikesCount || 0,
+              actual_comments_count: actualCommentsCount || 0
+            }
+          })
+        )
+
+        // Sort by actual counts
+        const sortedPosts = postsWithCounts.sort((a, b) => {
+          const aValue = sortBy === 'likes_count' ? a.actual_likes_count : a.actual_comments_count
+          const bValue = sortBy === 'likes_count' ? b.actual_likes_count : b.actual_comments_count
+          return order === 'asc' ? aValue - bValue : bValue - aValue
+        })
+
+        // Apply pagination
+        const paginatedPosts = sortedPosts.slice(offset, offset + limit)
+
+        // Fetch related data for paginated posts
+        const postsWithRelations = await Promise.all(
+          paginatedPosts.map(async (post) => {
+            // Fetch profile
+            console.log('[postService] Fetching profile for user:', post.user_id)
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('username, display_name, avatar_url')
+              .eq('user_id', post.user_id)
+              .single()
+            
+            // Fetch pokemon if exists
+            let pokemon = null
+            if (post.pokemon_id) {
+              console.log('[postService] Fetching pokemon:', post.pokemon_id)
+              const { data: pokemonData } = await supabase
+                .from('pokemon')
+                .select('*')
+                .eq('pokemon_id', post.pokemon_id)
+                .single()
+              pokemon = pokemonData
+            }
+            
+            return {
+              ...post,
+              likes_count: post.actual_likes_count,
+              comments_count: post.actual_comments_count,
+              profiles: profile,
+              pokemon: pokemon
+            }
+          })
+        )
+        
+        console.log('Posts with actual counts:', postsWithRelations)
+        return postsWithRelations
+      }
+
+      // For other sorting (by created_at, etc.), use regular query
       let query = supabase
         .from('posts')
         .select('*')
@@ -168,75 +262,39 @@ export const postService = {
     return true
   },
 
-  // Toggle like
-  async toggleLike(postId) {
-    console.log('[postService] Getting session for toggleLike:', postId)
-    const sessionResponse = await supabase.auth.getSession()
-    
-    if (sessionResponse.error) {
-      throw new Error('Failed to get session: ' + sessionResponse.error.message)
-    }
-    
-    const session = sessionResponse.data?.session
-    if (!session?.user) throw new Error('User not authenticated')
-    
-    const user = session.user
-
-    // Check if already liked
-    console.log('[postService] Checking existing like for post:', postId, 'user:', user.id)
-    const { data: existingLike } = await supabase
-      .from('likes')
-      .select('like_id')
-      .eq('post_id', postId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (existingLike) {
-      // Unlike
-      console.log('[postService] Deleting like:', existingLike.like_id)
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('like_id', existingLike.like_id)
-
-      if (error) throw error
-
-      // Decrement likes_count
-      console.log('[postService] Decrementing likes count for post:', postId)
-      await supabase.rpc('decrement_likes_count', { post_id: postId })
-
-      return { liked: false }
-    } else {
-      // Like
-      console.log('[postService] Inserting new like for post:', postId, 'user:', user.id)
-      const { error } = await supabase
-        .from('likes')
-        .insert({ post_id: postId, user_id: user.id })
-
-      if (error) throw error
-
-      // Increment likes_count
-      console.log('[postService] Incrementing likes count for post:', postId)
-      await supabase.rpc('increment_likes_count', { post_id: postId })
-
-      return { liked: true }
-    }
-  },
-
   // Search posts
   async searchPosts(searchTerm) {
     console.log('[postService] Searching posts with term:', searchTerm)
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles:user_id (username, display_name, avatar_url),
-        pokemon:pokemon_id (*)
-      `)
-      .or(`content.ilike.%${searchTerm}%`)
-      .order('created_at', { ascending: false })
+    
+    try {
+      // Get all posts with relations
+      const { data: allPosts, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (username, display_name),
+          pokemon:pokemon_id (*)
+        `)
+        .order('created_at', { ascending: false })
 
-    if (error) throw error
-    return data
+      if (error) throw error
+
+      // Filter results client-side to search across all tables
+      const searchLower = searchTerm.toLowerCase()
+      const filteredPosts = allPosts.filter(post => {
+        const contentMatch = post.content?.toLowerCase().includes(searchLower)
+        const usernameMatch = post.profiles?.username?.toLowerCase().includes(searchLower)
+        const displayNameMatch = post.profiles?.display_name?.toLowerCase().includes(searchLower)
+        const pokemonNameMatch = post.pokemon?.name?.toLowerCase().includes(searchLower)
+        
+        return contentMatch || usernameMatch || displayNameMatch || pokemonNameMatch
+      })
+      console.log('Filtered posts:', filteredPosts)
+      console.log('searchPosts response:', { count: filteredPosts.length })
+      return filteredPosts
+    } catch (error) {
+      console.error('searchPosts error:', error)
+      throw error
+    }
   }
 }
