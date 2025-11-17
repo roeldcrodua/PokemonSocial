@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { postService } from '../services/postService'
 import PostCard from '../components/Posts/PostCard'
@@ -8,33 +8,96 @@ import '../components/Posts/Posts.css'
 export default function HomePage() {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [offset, setOffset] = useState(0)
   const [sortBy, setSortBy] = useState('created_at')
   const [showPostForm, setShowPostForm] = useState(false)
   const { user } = useAuth()
+  const observerRef = useRef()
+  const lastPostRef = useRef()
 
   useEffect(() => {
-    fetchPosts()
+    // Reset and fetch when sort changes
+    setPosts([])
+    setOffset(0)
+    setHasMore(true)
+    fetchPosts(true)
   }, [sortBy])
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (reset = false) => {
     try {
-      setLoading(true)
-      console.log('[HomePage] Fetching posts with sortBy:', sortBy)
+      if (reset) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
+      
+      const currentOffset = reset ? 0 : offset
+      console.log('[HomePage] Fetching posts with sortBy:', sortBy, 'offset:', currentOffset)
+      
       const data = await postService.getPosts({ 
         sortBy,
-        limit: 20 
+        limit: 10,
+        offset: currentOffset
       })
-      setPosts(data)
+      
+      if (reset) {
+        setPosts(data)
+      } else {
+        setPosts(prev => [...prev, ...data])
+      }
+      
+      // If we got fewer than 10, we've reached the end
+      if (data.length < 10) {
+        setHasMore(false)
+      } else {
+        setOffset(currentOffset + 10)
+      }
     } catch (error) {
       console.error('Error fetching posts:', error)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }
 
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      fetchPosts(false)
+    }
+  }, [loadingMore, hasMore, offset, sortBy])
+
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: '100px',
+      threshold: 0.1
+    }
+
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        loadMore()
+      }
+    }, options)
+
+    if (lastPostRef.current) {
+      observerRef.current.observe(lastPostRef.current)
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [loadMore])
+
   const handlePostCreated = () => {
     setShowPostForm(false)
-    fetchPosts()
+    setPosts([])
+    setOffset(0)
+    setHasMore(true)
+    fetchPosts(true)
   }
 
   return (
@@ -54,6 +117,12 @@ export default function HomePage() {
               onClick={() => setSortBy('likes_count')}
             >
               Most Liked
+            </button>
+            <button
+              className={`sort-btn ${sortBy === 'comments_count' ? 'active' : ''}`}
+              onClick={() => setSortBy('comments_count')}
+            >
+              Most Commented
             </button>
           </div>
 
@@ -86,13 +155,46 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="posts-grid">
-          {posts.map(post => (
-            <PostCard 
-              key={post.post_id} 
-              post={post} 
-              onLikeToggle={fetchPosts} 
-            />
-          ))}
+          {posts.map((post, index) => {
+            if (index === posts.length - 1) {
+              return (
+                <div key={post.post_id} ref={lastPostRef}>
+                  <PostCard 
+                    post={post} 
+                    onLikeToggle={() => {
+                      setPosts([])
+                      setOffset(0)
+                      setHasMore(true)
+                      fetchPosts(true)
+                    }} 
+                  />
+                </div>
+              )
+            }
+            return (
+              <PostCard 
+                key={post.post_id} 
+                post={post} 
+                onLikeToggle={() => {
+                  setPosts([])
+                  setOffset(0)
+                  setHasMore(true)
+                  fetchPosts(true)
+                }} 
+              />
+            )
+          })}
+          {loadingMore && (
+            <div className="loading-more">
+              <div className="spinner"></div>
+              <p>Loading more posts...</p>
+            </div>
+          )}
+          {!hasMore && posts.length > 0 && (
+            <div className="end-message">
+              <p>You've reached the end! 🎉</p>
+            </div>
+          )}
         </div>
       )}
     </div>
