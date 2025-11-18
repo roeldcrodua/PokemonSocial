@@ -209,7 +209,9 @@ export const postService = {
         user_id: userId,
         content: postData.content,
         image_url: postData.image_url,
-        pokemon_id: postData.pokemon_id
+        pokemon_id: postData.pokemon_id,
+        repost_id: postData.repost_id,
+        repost_link: postData.repost_link
       }
       
       console.log('Insert payload:', insertData)

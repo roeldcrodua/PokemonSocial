@@ -1,10 +1,11 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { formatDistanceToNow } from '../../utils/dateUtils'
 import './Posts.css'
 
 const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete }, ref) => {
+  const navigate = useNavigate()
   const [isLiked, setIsLiked] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [likesCount, setLikesCount] = useState(post.likes_count || 0)
@@ -125,6 +126,14 @@ const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete
     }
   }
 
+  const handleShare = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Navigate to home page with repost parameter
+    navigate('/?repost=' + post.post_id)
+  }
+
   return (
     <Link to={`/post/${post.post_id}`} className="post-card">
       <div className="post-header">
@@ -160,6 +169,19 @@ const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete
         <p>{post.content}</p>
       </div>
 
+      {post.repost_link && (
+        <Link 
+          to={post.repost_link} 
+          className="repost-link-card"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="repost-link-icon">🔁</div>
+          <div className="repost-link-text">
+            View original post
+          </div>
+        </Link>
+      )}
+
       {post.image_url && (
         <div className="post-image">
           <img src={post.image_url} alt="Post content" />
@@ -179,6 +201,15 @@ const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete
           <span className="icon">💬</span>
           <span>{commentsCount}</span>
         </div>
+
+        <button 
+          className="share-button"
+          onClick={handleShare}
+          title="Repost this"
+        >
+          <span className="icon">🔁</span>
+          <span>Repost</span>
+        </button>
       </div>
     </Link>
   )

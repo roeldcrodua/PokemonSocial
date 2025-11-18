@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useSearchParams } from 'react-router-dom'
 import { postService } from '../services/postService'
 import PostCard from '../components/Posts/PostCard'
 import PostForm from '../components/Posts/PostForm'
@@ -13,9 +14,23 @@ export default function HomePage() {
   const [offset, setOffset] = useState(0)
   const [sortBy, setSortBy] = useState('created_at')
   const [showPostForm, setShowPostForm] = useState(false)
+  const [repostId, setRepostId] = useState(null)
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const observerRef = useRef()
   const lastPostRef = useRef()
+
+  // Check for repost parameter in URL
+  useEffect(() => {
+    const repost = searchParams.get('repost')
+    if (repost && user) {
+      setRepostId(repost)
+      setShowPostForm(true)
+      // Clear the URL parameter
+      searchParams.delete('repost')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, user, setSearchParams])
 
   useEffect(() => {
     // Reset and fetch when sort changes
@@ -94,10 +109,16 @@ export default function HomePage() {
 
   const handlePostCreated = () => {
     setShowPostForm(false)
+    setRepostId(null)
     setPosts([])
     setOffset(0)
     setHasMore(true)
     fetchPosts(true)
+  }
+
+  const handleCancelPost = () => {
+    setShowPostForm(false)
+    setRepostId(null)
   }
 
   return (
@@ -140,7 +161,8 @@ export default function HomePage() {
       {showPostForm && (
         <PostForm 
           onSuccess={handlePostCreated} 
-          onCancel={() => setShowPostForm(false)} 
+          onCancel={handleCancelPost}
+          initialData={repostId ? { repost_id: repostId } : null}
         />
       )}
 
