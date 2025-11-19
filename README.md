@@ -95,9 +95,9 @@ GIF created with Wondershare Uniconverter 14 Tool - GIF Maker
 
 ## Notes
 
--Describe any challenges encountered while building the app.
-  - Supabase DB setup.
-  - Authorization setup in supabase.
+- Describe any challenges encountered while building the app.
+  -- Supabase DB setup.
+  -- Authorization setup in supabase.
 - This project uses **Supabase** for backend, which handles auth, database, and storage
 - **Pokemon data** is fetched from PokeAPI and cached locally
 - **Image URLs** are external (not uploaded) to simplify storage
