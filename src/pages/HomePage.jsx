@@ -29,6 +29,8 @@ export default function HomePage() {
       // Clear the URL parameter
       searchParams.delete('repost')
       setSearchParams(searchParams, { replace: true })
+      // Scroll to top to show the form
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [searchParams, user, setSearchParams])
 

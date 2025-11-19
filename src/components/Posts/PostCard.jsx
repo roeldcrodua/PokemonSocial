@@ -132,6 +132,9 @@ const PostCard = forwardRef(({ post, onLikeToggle, showActions, onEdit, onDelete
     
     // Navigate to home page with repost parameter
     navigate('/?repost=' + post.post_id)
+    
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
